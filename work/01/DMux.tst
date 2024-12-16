@@ -4,6 +4,7 @@
 // File name: projects/1/DMux.tst
 
 load DMux.hdl,
+output-file DMux.out,
 compare-to DMux.cmp,
 output-list in sel a b;
 
