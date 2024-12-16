@@ -4,6 +4,7 @@
 // File name: projects/1/Not16.tst
 
 load Not16.hdl,
+output-file Not16.out,
 compare-to Not16.cmp,
 output-list in%B1.16.1 out%B1.16.1;
 
