@@ -4,6 +4,7 @@
 // File name: projects/1/Not.tst
 
 load Not.hdl,
+output-file Not.out,
 compare-to Not.cmp,
 output-list in out;
 
