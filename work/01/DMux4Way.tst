@@ -4,6 +4,7 @@
 // File name: projects/1/DMux4Way.tst
 
 load DMux4Way.hdl,
+output-file DMux4Way.out,
 compare-to DMux4Way.cmp,
 output-list in sel%B2.2.2 a b c d;
 
