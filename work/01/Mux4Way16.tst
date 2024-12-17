@@ -4,6 +4,7 @@
 // File name: projects/1/Mux4Way16.tst
 
 load Mux4Way16.hdl,
+output-file Mux4Way16.out,
 compare-to Mux4Way16.cmp,
 output-list a%B1.16.1 b%B1.16.1 c%B1.16.1 d%B1.16.1 sel%B2.2.2 out%B1.16.1;
 
