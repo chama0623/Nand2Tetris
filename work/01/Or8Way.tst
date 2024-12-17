@@ -4,6 +4,7 @@
 // File name: projects/1/Or8Way.tst
 
 load Or8Way.hdl,
+output-file Or8Way.out,
 compare-to Or8Way.cmp,
 output-list in%B2.8.2 out;
 

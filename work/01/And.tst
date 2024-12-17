@@ -4,6 +4,7 @@
 // File name: projects/1/And.tst
 
 load And.hdl,
+output-file And.out,
 compare-to And.cmp,
 output-list a b out;
 

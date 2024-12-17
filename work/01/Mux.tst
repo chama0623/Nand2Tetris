@@ -4,6 +4,7 @@
 // File name: projects/1/Mux.tst
 
 load Mux.hdl,
+output-file Mux.out,
 compare-to Mux.cmp,
 output-list a b sel out;
 

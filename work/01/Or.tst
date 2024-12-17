@@ -4,6 +4,7 @@
 // File name: projects/1/Or.tst
 
 load Or.hdl,
+output-file Or.out,
 compare-to Or.cmp,
 output-list a b out;
 
