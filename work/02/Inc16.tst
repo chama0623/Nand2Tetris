@@ -4,6 +4,7 @@
 // File name: projects/2/Inc16.tst
 
 load Inc16.hdl,
+output-file Inc16.out,
 compare-to Inc16.cmp,
 output-list in%B1.16.1 out%B1.16.1;
 
