@@ -4,6 +4,7 @@
 // File name: projects/2/FullAdder.tst
 
 load FullAdder.hdl,
+output-file FullAdder.out,
 compare-to FullAdder.cmp,
 output-list a b c sum carry%B2.1.2;
 
