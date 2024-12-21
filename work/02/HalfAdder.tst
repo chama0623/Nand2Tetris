@@ -4,6 +4,7 @@
 // File name: projects/2/HalfAdder.tst
 
 load HalfAdder.hdl,
+output-file HalfAdder.out,
 compare-to HalfAdder.cmp,
 output-list a b sum carry;
 
