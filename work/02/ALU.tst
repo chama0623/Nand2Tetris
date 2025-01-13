@@ -5,7 +5,8 @@
 
 load ALU.hdl,
 compare-to ALU.cmp,
-output-list x%B1.16.1 y%B1.16.1 zx nx zy ny f no out zr ng;
+output-file ALU.out,
+output-list x%B1.16.1 y%B1.16.1 zx nx zy ny f no out%B1.16.1 zr ng;
 
 set x %B0000000000000000,  // x = 0
 set y %B1111111111111111;  // y = -1
