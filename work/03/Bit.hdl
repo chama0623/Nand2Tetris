@@ -13,5 +13,7 @@ CHIP Bit {
     OUT out;
 
     PARTS:
-    //// Replace this comment with your code.
+    // fbは内部変数なので定義されていなくてもよい
+    Mux(a=fb, b=in, sel=load, out=OutMux);
+    DFF(in=OutMux, out=out, out=fb); // outは複数の変数に渡せる
 }

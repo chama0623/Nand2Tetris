@@ -4,6 +4,7 @@
 // File name: projects/3/a/Bit.tst
 
 load Bit.hdl,
+output-file Bit.out,
 compare-to Bit.cmp,
 output-list time%S1.4.1 in load%B1.1.2 out;
 
