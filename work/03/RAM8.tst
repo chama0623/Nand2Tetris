@@ -4,6 +4,7 @@
 // File name: projects/3/a/RAM8.tst
 
 load RAM8.hdl,
+output-file RAM8.out,
 compare-to RAM8.cmp,
 output-list time%S1.3.1 in%D1.6.1 load%B2.1.1 address%D3.1.3 out%D1.6.1;
 
