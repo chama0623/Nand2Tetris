@@ -4,6 +4,7 @@
 // File name: projects/3/a/RAM64.tst
 
 load RAM64.hdl,
+output-file RAM64.out,
 compare-to RAM64.cmp,
 output-list time%S1.3.1 in%D1.6.1 load%B2.1.1 address%D2.3.2 out%D1.6.1;
 
