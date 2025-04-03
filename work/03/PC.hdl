@@ -15,4 +15,13 @@ CHIP PC {
     
     PARTS:
     //// Replace this comment with your code.
+    // load, inc, resetのいずれかを行うか?
+    Or(a=inc, b=load, out=outOrTemp);
+    Or(a=outOrTemp, b=reset, out=isSet);
+
+    Inc16(in=fb, out=incOut);
+    Mux16(a=fb, b=incOut, sel=inc, out=outInc); // inc
+    Mux16(a=outInc, b=in, sel=load, out=outLoad); // load
+    Mux16(a=outLoad, b[0..15]=false, sel=reset, out=outReset); // reset
+    Register(in=outReset, load=isSet, out=out, out=fb);
 }
