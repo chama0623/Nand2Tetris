@@ -9,6 +9,7 @@
 
 load Mult.asm,
 compare-to Mult.cmp,
+output-file Mult.out,
 output-list RAM[0]%D2.6.2 RAM[1]%D2.6.2 RAM[2]%D2.6.2;
 
 set RAM[0] 0,   // Sets R0 and R1 to some input values
