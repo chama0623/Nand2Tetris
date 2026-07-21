@@ -12,18 +12,28 @@ def main():
         sys.exit(1)
 
     asm_file = sys.argv[1]
-    print(f"Assembling {asm_file}...")
+    out_file = asm_file.rsplit(".", 1)[0] + ".hack"
     parser = Parser(asm_file)
     code = Code()
-    while(parser.hasMoreLines()):
+    results = []
+    print(f"Assembling {asm_file}...")
+    while parser.hasMoreLines():
         parser.advanced()
         itype = parser.instructionType()
-        if itype in (INSTRUCTION.A_INSTRUCTION, INSTRUCTION.L_INSTRUCTION):
-            # print(parser.symbol())
-            pass
-        else:
-            print(parser.jump())
-            print(code.jump(parser.jump()))
+        bin = ""
+        if itype == INSTRUCTION.A_INSTRUCTION:
+            bin = f"0{int(parser.symbol()):015b}"
+        elif itype == INSTRUCTION.C_INSTRUCTION:
+            comp, dest, jump = code.comp(parser.comp()), code.dest(parser.dest()), code.jump(parser.jump())
+            bin = f"111{comp}{dest}{jump}"
+        #else: # L_INSTRUCTION
+            #pass
+        results.append(bin)
+        
+    with open(out_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(results) + "\n")
+
+    print("Done!")
 
 class Parser:
     def __init__(self, asm_file:str) ->None:
