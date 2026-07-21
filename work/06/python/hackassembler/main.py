@@ -6,35 +6,6 @@ class INSTRUCTION(Enum):
     C_INSTRUCTION = 1
     L_INSTRUCTION = 2
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: hackassembler <filename.asm>")
-        sys.exit(1)
-
-    asm_file = sys.argv[1]
-    out_file = asm_file.rsplit(".", 1)[0] + ".hack"
-    parser = Parser(asm_file)
-    code = Code()
-    results = []
-    print(f"Assembling {asm_file}...")
-    while parser.hasMoreLines():
-        parser.advanced()
-        itype = parser.instructionType()
-        bin = ""
-        if itype == INSTRUCTION.A_INSTRUCTION:
-            bin = f"0{int(parser.symbol()):015b}"
-        elif itype == INSTRUCTION.C_INSTRUCTION:
-            comp, dest, jump = code.comp(parser.comp()), code.dest(parser.dest()), code.jump(parser.jump())
-            bin = f"111{comp}{dest}{jump}"
-        #else: # L_INSTRUCTION
-            #pass
-        results.append(bin)
-        
-    with open(out_file, "w", encoding="utf-8") as f:
-        f.write("\n".join(results) + "\n")
-
-    print("Done!")
-
 class Parser:
     def __init__(self, asm_file:str) ->None:
         """コンストラクタ asmファイルを読み込んで文字列の前処理を行う"""
@@ -144,15 +115,15 @@ class Code:
             "1": "111111",
             "-1": "111010",
             "D": "001100",
-            "A": "011000",
+            "A": "110000",
             "!D": "001101",
-            "!A": "011001",
+            "!A": "110001",
             "-D": "001111",
-            "-A": "011011",
+            "-A": "110011",
             "D+1": "011111",
             "A+1": "110111",
             "D-1": "001110",
-            "A-1": "011010",
+            "A-1": "110010",
             "D+A": "000010",
             "D-A": "010011",
             "A-D": "000111",
@@ -178,6 +149,68 @@ class Code:
             "JMP": "111",
         }
         return jump_table.get(j, "000")
+    
+class SymbolTable:
+    def __init__(self) -> None:
+        # 定義済みSymbolの追加
+        self._table = {
+            "SP": 0,
+            "LCL": 1,
+            "ARG": 2,
+            "THIS": 3,
+            "THAT": 4,
+            "SCREEN": 16384,
+            "KBD": 24576,
+        }
+
+        # R0~R15を追加する
+        for i in range(16):
+            self._table[f"R{i}"] = i
+        
+    def addEntry(self, symbol:str, address:int) -> None:
+        """Symbol Tableに<K, V> = <symbol, address>を追加する"""
+        self._table[symbol] = address
+
+    def contains(self, symbol:str) -> bool:
+        """Symbol TableのKeyにsymbokが含まれるときtrue"""
+        return symbol in self._table
+    
+    def getAddress(self, symbol:str) -> int:
+        """key symbolに対応するaddressを返す
+        key symbolが存在しないとき、0を返す
+        """
+        return self._table.get(symbol, 0)
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: hackassembler <filename.asm>")
+        sys.exit(1)
+
+    asm_file = sys.argv[1]
+    out_file = asm_file.rsplit(".", 1)[0] + ".hack"
+    parser = Parser(asm_file)
+    code = Code()
+    symbol_table =  SymbolTable()
+    results = []
+    print(f"Assembling {asm_file}...")
+    while parser.hasMoreLines():
+        parser.advanced()
+        itype = parser.instructionType()
+        bin = ""
+        if itype == INSTRUCTION.A_INSTRUCTION:
+            bin = f"0{int(parser.symbol()):015b}"
+        elif itype == INSTRUCTION.C_INSTRUCTION:
+            comp, dest, jump = code.comp(parser.comp()), code.dest(parser.dest()), code.jump(parser.jump())
+            bin = f"111{comp}{dest}{jump}"
+        #else: # L_INSTRUCTION
+            #pass
+        results.append(bin)
+        
+    with open(out_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(results) + "\n")
+
+    print("Done!")
+    
 
 if __name__ == "__main__":
     main()
