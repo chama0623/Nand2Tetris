@@ -93,6 +93,11 @@ class Parser:
             return self._split_c_instruction()[2]
         else:
             return ""
+        
+    def reset_idx(self):
+        """現在のidxとcmdをリセットする(第2パスの処理用)"""
+        self._current_idx = -1
+        self._current_cmd = ""
 
 class Code:
     def dest(self, d:str) -> str:
@@ -192,22 +197,49 @@ def main():
     code = Code()
     symbol_table =  SymbolTable()
     results = []
+    rom_address = 0 # 行番号の記録用
+    ram_address = 16 # 変数に番号を付与する用
     print(f"Assembling {asm_file}...")
+    print("Pass 1 Processing...")
+    while parser.hasMoreLines():
+        parser.advanced()
+        itype = parser.instructionType()
+        if itype == INSTRUCTION.L_INSTRUCTION:
+            symbol_table.addEntry(parser.symbol(), rom_address)
+        else:
+            rom_address += 1
+    # print(symbol_table._table)
+    print("Done!")
+
+    print("Pass 2 Processing...")
+    parser.reset_idx()
     while parser.hasMoreLines():
         parser.advanced()
         itype = parser.instructionType()
         bin = ""
         if itype == INSTRUCTION.A_INSTRUCTION:
-            bin = f"0{int(parser.symbol()):015b}"
+            sym = parser.symbol()
+            if sym.isdigit(): #定数Symbolのとき
+                address = int(sym)
+            elif symbol_table.contains(parser.symbol()): # 定義済みSymbol, Pass1で登録済みのSymbol
+                address = symbol_table.getAddress(sym)
+            else: # 未登録の変数
+                # Symbol Tableに追加する(未予約の16以降のアドレスに追加する)
+                symbol_table.addEntry(parser.symbol(), ram_address)
+                address = ram_address
+                ram_address += 1
+            bin = f"0{address:015b}"
         elif itype == INSTRUCTION.C_INSTRUCTION:
+            pass
             comp, dest, jump = code.comp(parser.comp()), code.dest(parser.dest()), code.jump(parser.jump())
             bin = f"111{comp}{dest}{jump}"
-        #else: # L_INSTRUCTION
-            #pass
+        else: # L_INSTRUCTION
+            continue
+
         results.append(bin)
         
     with open(out_file, "w", encoding="utf-8") as f:
-        f.write("\n".join(results) + "\n")
+        f.write("\n".join(results))
 
     print("Done!")
     
