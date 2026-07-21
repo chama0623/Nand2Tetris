@@ -14,14 +14,16 @@ def main():
     asm_file = sys.argv[1]
     print(f"Assembling {asm_file}...")
     parser = Parser(asm_file)
+    code = Code()
     while(parser.hasMoreLines()):
         parser.advanced()
         itype = parser.instructionType()
         if itype in (INSTRUCTION.A_INSTRUCTION, INSTRUCTION.L_INSTRUCTION):
-            print(parser.symbol())
+            # print(parser.symbol())
+            pass
         else:
-            print(parser.dest(), parser.comp(), parser.jump())
-        print("")
+            print(parser.jump())
+            print(code.jump(parser.jump()))
 
 class Parser:
     def __init__(self, asm_file:str) ->None:
@@ -51,7 +53,7 @@ class Parser:
         if self.hasMoreLines():
             self._current_idx += 1
             self._current_cmd = self._cmds[self._current_idx]
-            print(f"{self._current_idx} : {self._current_cmd}")
+            # print(f"{self._current_idx} : {self._current_cmd}")
 
 
     def instructionType(self) -> INSTRUCTION:
@@ -111,6 +113,61 @@ class Parser:
         else:
             return ""
 
+class Code:
+    def dest(self, d:str) -> str:
+        """destを2進数表示3bitの文字列で返す"""
+        bin_dest = 0b000
+        if "M" in d:
+            bin_dest = bin_dest | 0b001
+        if "D" in d:
+            bin_dest = bin_dest | 0b010
+        if "A" in d:
+            bin_dest = bin_dest | 0b100
+        return f"{bin_dest:03b}" # 03b:3桁のbinary表記で先頭を0埋めする
+    
+    def comp(self, c:str) -> str:
+        """compを2進数表示7bitの文字列で返す.
+        MとAでc1~c6は同じであることを利用してマッピングテーブルを削減する
+        """
+        comp_table = {
+            "0": "101010",
+            "1": "111111",
+            "-1": "111010",
+            "D": "001100",
+            "A": "011000",
+            "!D": "001101",
+            "!A": "011001",
+            "-D": "001111",
+            "-A": "011011",
+            "D+1": "011111",
+            "A+1": "110111",
+            "D-1": "001110",
+            "A-1": "011010",
+            "D+A": "000010",
+            "D-A": "010011",
+            "A-D": "000111",
+            "D&A": "000000",
+            "D|A": "010101",
+        }
+        if "M" in c:
+            c_replaced = c.replace("M", "A")
+            return "1" + comp_table.get(c_replaced, "000000") # 一応禁則入力に備えてdefault値を入れる
+        else:
+            return "0" + comp_table.get(c, "000000")
+
+    def jump(self, j: str) -> str:
+        """jumpを2進数表示3bitの文字列で返す"""
+        jump_table = {
+            "": "000",
+            "JGT": "001",
+            "JEQ": "010",
+            "JGE": "011",
+            "JLT": "100",
+            "JNE": "101",
+            "JLE": "110",
+            "JMP": "111",
+        }
+        return jump_table.get(j, "000")
 
 if __name__ == "__main__":
     main()
