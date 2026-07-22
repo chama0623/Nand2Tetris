@@ -82,6 +82,7 @@ class Parser:
 class CodeWriter:
     def __init__(self, asm_file:str) -> None:
         self._file = open(asm_file, "w", encoding="utf-8")
+        self._label_count = 0
 
     def writeArithmetic(self, command:str) -> None:
         unary_operators = {
@@ -93,6 +94,11 @@ class CodeWriter:
             "sub" : "-",
             "and" : "&",
             "or" : "|",
+        }
+        compare_operators = {
+            "eq": "JEQ",
+            "gt": "JGT",
+            "lt": "JLT",
         }
 
         if command in unary_operators:
@@ -116,7 +122,6 @@ class CodeWriter:
             ]
             self._file.write("\n".join(asm) + "\n")
 
-
         elif command in binary_operators:
             operator = binary_operators[command]
             """
@@ -130,7 +135,7 @@ class CodeWriter:
             @SP
             M=M-1
             A=M
-            M=M ? D # arg1 ? arg2(?は指定された2項演算). 引き算に対応するためD ? Mにしてはいけない
+            M=D ? M # arg1 ? arg2(?は指定された2項演算). 引き算はD ? Mにしてはいけない
             # SPがarg1にいるので、1つ進める
             @SP
             M=M+1
@@ -143,11 +148,78 @@ class CodeWriter:
                 "@SP",
                 "M=M-1",
                 "A=M",
-                f"M=M{operator}D",
+                f"M=M-D" if command == "sub" else f"M=D{operator}M",
                 "@SP",
                 "M=M+1",
             ]
             self._file.write("\n".join(asm) + "\n")
+
+        elif command in compare_operators:
+            operator = compare_operators[command]
+            """
+            比較演算子が与えられたとき、以下のアセンブリコードを返す
+            # SP-1(arg2)を取り出す
+            @SP
+            M=M-1
+            A=M
+            D=M # 値をDレジスタに記録
+            
+            # SP-2(arg1)を取り出す
+            @SP
+            M=M-1
+            A=M
+            
+            # D = arg1 - arg2
+            D=M-D
+            @TRUE_LABEL_*(*はlabel_count)
+            D;?(?は指定された比較演算)
+            
+            # FALSEの時の処理
+            D=0
+            @END_LABEL_*
+            0;JMP
+
+            # TRUEの時の処理
+            (TRUE_LABEL_*)
+            D=-1
+            (END_LABEL_*)
+
+            # DをStackに書く
+            @SP
+            A=M
+            M=D
+            @SP
+            M=M+1
+            """
+            asm = [
+                "@SP",
+                "M=M-1",
+                "A=M",
+                "D=M",
+                
+                "@SP",
+                "M=M-1",
+                "A=M",
+                
+                "D=M-D",
+                f"@TRUE_LABEL_{self._label_count}",
+                f"D;{operator}",
+                "D=0",
+                f"@END_LABEL_{self._label_count}",
+                "0;JMP",
+
+                f"(TRUE_LABEL_{self._label_count})",
+                "D=-1",
+                f"(END_LABEL_{self._label_count})",
+
+                "@SP",
+                "A=M",
+                "M=D",
+                "@SP",
+                "M=M+1",                
+            ]
+            self._file.write("\n".join(asm) + "\n")
+            self._label_count += 1
 
     def writePushPop(self, command:CMD_TYPE, segment:str, index:int) -> None:
         if command == CMD_TYPE.C_PUSH and segment == "constant":
@@ -194,7 +266,7 @@ def main():
     while parser.hasMoreLines():
         parser.advance()
         cmd_type, arg1, arg2 = parser.commandType(), parser.arg1(), parser.arg2()
-        print(cmd_type, arg1, arg2)
+        # print(cmd_type, arg1, arg2)
 
         if cmd_type == CMD_TYPE.C_PUSH:
             code_writer.writePushPop(cmd_type, arg1, arg2)
@@ -202,6 +274,7 @@ def main():
             code_writer.writeArithmetic(arg1)
 
     code_writer.close()
+    print("Done!")
 
 if __name__ == "__main__":
     main()
