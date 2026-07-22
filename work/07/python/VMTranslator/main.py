@@ -79,18 +79,129 @@ class Parser:
         else:
             return 0
 
+class CodeWriter:
+    def __init__(self, asm_file:str) -> None:
+        self._file = open(asm_file, "w", encoding="utf-8")
+
+    def writeArithmetic(self, command:str) -> None:
+        unary_operators = {
+            "neg" : "-",
+            "not" : "!"
+        }
+        binary_operators = {
+            "add" : "+",
+            "sub" : "-",
+            "and" : "&",
+            "or" : "|",
+        }
+
+        if command in unary_operators:
+            """
+            単項演算子が与えられたとき、以下のアセンブリコードを返す
+            @SP
+            M=M-1
+            A=M
+            M=?M(?は指定された単項演算)
+            @SP
+            M=M+1
+            """
+            operator = unary_operators[command]
+            asm = [
+                "@SP",
+                "M=M-1",
+                "A=M",
+                f"M={operator}M",
+                "@SP",
+                "M=M+1",
+            ]
+            self._file.write("\n".join(asm) + "\n")
+
+
+        elif command in binary_operators:
+            operator = binary_operators[command]
+            """
+            2項演算子が与えられたとき、以下のアセンブリコードを返す
+            # SP-1(arg2)を取り出す
+            @SP
+            M=M-1
+            A=M
+            D=M # 値をDレジスタに記録
+            # SP-2(arg1)を取り出す
+            @SP
+            M=M-1
+            A=M
+            M=M ? D # arg1 ? arg2(?は指定された2項演算). 引き算に対応するためD ? Mにしてはいけない
+            # SPがarg1にいるので、1つ進める
+            @SP
+            M=M+1
+            """
+            asm = [
+                "@SP",
+                "M=M-1",
+                "A=M",
+                "D=M",
+                "@SP",
+                "M=M-1",
+                "A=M",
+                f"M=M{operator}D",
+                "@SP",
+                "M=M+1",
+            ]
+            self._file.write("\n".join(asm) + "\n")
+
+    def writePushPop(self, command:CMD_TYPE, segment:str, index:int) -> None:
+        if command == CMD_TYPE.C_PUSH and segment == "constant":
+            """
+            push constant n(index)が与えられたとき、以下のアセンブリコードを返す
+
+            @n # Aレジスタにnを入れる
+            D=A # DレジスタにA(=n)を記録する
+            @SP # AレジスタにSPを入れる(RAM[0]を指す). 
+            A=M # SPの値をAレジスタに入れる. RAM[0]=256(RAMのStack領域の先頭アドレス)で初期化されている
+            M=D # RAM[A]にDレジスタの値を入れる
+            @SP # AレジスタにSPを入れる
+            M=M+1 # SPの値をインクリメント(SPを1つ進める)
+            """
+            asm = [
+            f"@{index}",
+                "D=A",
+                "@SP",
+                "A=M",
+                "M=D",
+                "@SP",
+                "M=M+1",
+            ]
+            self._file.write("\n".join(asm) + "\n")
+
+        elif command == CMD_TYPE.C_POP:
+            pass
+        else:
+            pass
+
+    def close(self) -> None:
+            self._file.close()
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: hackassembler <filename.vm>")
         sys.exit(1)
 
     vm_file = sys.argv[1]
+    asm_file = vm_file.rsplit(".", 1)[0] + ".asm"
     parser = Parser(vm_file)
+    code_writer = CodeWriter(asm_file)
     print(f"Translating {vm_file}...")
     while parser.hasMoreLines():
         parser.advance()
-        print(parser.commandType(), parser.arg1(), parser.arg2())
+        cmd_type, arg1, arg2 = parser.commandType(), parser.arg1(), parser.arg2()
+        print(cmd_type, arg1, arg2)
 
+        if cmd_type == CMD_TYPE.C_PUSH:
+            code_writer.writePushPop(cmd_type, arg1, arg2)
+        elif cmd_type == CMD_TYPE.C_ARITHMETIC:
+            code_writer.writeArithmetic(arg1)
+
+    code_writer.close()
 
 if __name__ == "__main__":
     main()
