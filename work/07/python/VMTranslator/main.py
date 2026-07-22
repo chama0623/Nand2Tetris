@@ -228,6 +228,7 @@ class CodeWriter:
             "this": "THIS",
             "that": "THAT",
         }
+        TEMP_BASE_ADDRESS = 5
         if command == CMD_TYPE.C_PUSH and segment == "constant":
             """
             push constant n(index)が与えられたとき、以下のアセンブリコードを返す
@@ -322,6 +323,50 @@ class CodeWriter:
             "@R13",
             "A=M",
             "M=D", 
+            ]
+            self._file.write("\n".join(asm) + "\n")
+        
+        elif command == CMD_TYPE.C_PUSH and segment == "temp":
+            """push temp n(index)が与えられたとき、以下のアセンブリコードを返す.
+            tempのbase addressは5で固定されているため、アセンブラコード内で5+nを計算せず、事前に計算した値を
+            アセンブラコードに埋め込む.
+            @5+n
+            D=M
+            @SP
+            A=M
+            M=D
+            @SP
+            M=M+1
+            """
+            address = TEMP_BASE_ADDRESS + index
+            asm = [
+                f"@{address}",
+                "D=M",
+                "@SP",
+                "A=M",
+                "M=D",
+                "@SP",
+                "M=M+1",
+            ]
+            self._file.write("\n".join(asm) + "\n")
+
+        elif command == CMD_TYPE.C_POP and segment == "temp":
+            """pop temp n(index)が与えられたとき、以下のアセンブリコードを返す.
+            @SP
+            M=M-1
+            A=M
+            D=M
+            @5+n
+            M=D
+            """
+            address = TEMP_BASE_ADDRESS + index
+            asm = [
+                "@SP",
+                "M=M-1",
+                "A=M",
+                "D=M",
+                f"@{address}",
+                "M=D",
             ]
             self._file.write("\n".join(asm) + "\n")
 
