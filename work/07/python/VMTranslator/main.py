@@ -222,6 +222,12 @@ class CodeWriter:
             self._label_count += 1
 
     def writePushPop(self, command:CMD_TYPE, segment:str, index:int) -> None:
+        SEGMENT_MAP = {
+            "local": "LCL",
+            "argument": "ARG",
+            "this": "THIS",
+            "that": "THAT",
+        }
         if command == CMD_TYPE.C_PUSH and segment == "constant":
             """
             push constant n(index)が与えられたとき、以下のアセンブリコードを返す
@@ -245,10 +251,79 @@ class CodeWriter:
             ]
             self._file.write("\n".join(asm) + "\n")
 
-        elif command == CMD_TYPE.C_POP:
-            pass
-        else:
-            pass
+        elif command == CMD_TYPE.C_PUSH and segment in SEGMENT_MAP:
+            """
+            push segment n(index)が与えられたとき、以下のアセンブリコードを返す.
+            push segment nはRAM[symbol+n]の値をstackにpushする.
+            symbolはsegment(local, argument, this, that)に対応するベースアドレスの記録場所を表わす.
+            # nをDレジスタに記録
+            @n
+            D=A
+            # symbolセグメントのベースアドレスを取得し、symbol+nを求める
+            @symbol
+            A=D+M
+            # RAM[symbol+n]の値をDレジスタに記録
+            D=M
+            # stackにpushする
+            @SP
+            A=M
+            M=D
+            @SP
+            M=M+1
+            """
+            symbol = SEGMENT_MAP[segment]
+            asm = [
+                f"@{index}",
+                "D=A",
+                f"@{symbol}",
+                "A=D+M",
+                "D=M",
+                "@SP",
+                "A=M",
+                "M=D",
+                "@SP",
+                "M=M+1",
+            ]
+            self._file.write("\n".join(asm) + "\n")
+        elif command == CMD_TYPE.C_POP and segment in SEGMENT_MAP:
+            """
+            pop segment n(index)が与えられたとき、以下のアセンブリコードを返す.
+            symbol+iとpopした値を同時にDレジスタに保持できないため、R13でpopした値を保持する
+            # symvolセグメントのベースアドレスを取得し、symbol+nを求める
+            @n
+            D=A
+            @symbol
+            D=D+M
+            # R13にsymbol+iを保持する
+            @R13
+            M=D
+            # stackからpopする
+            @SP
+            M=M-1
+            A=M
+            D=M
+            # RAM[symbol+i]にpopした値を記録する
+            @R13
+            A=M
+            M=D
+            """
+            symbol = SEGMENT_MAP[segment]
+            asm = [
+            f"@{index}",
+            "D=A",
+            f"@{symbol}",
+            "D=D+M",
+            "@R13",
+            "M=D",
+            "@SP",
+            "M=M-1",
+            "A=M",
+            "D=M",
+            "@R13",
+            "A=M",
+            "M=D", 
+            ]
+            self._file.write("\n".join(asm) + "\n")
 
     def close(self) -> None:
             self._file.close()
@@ -268,7 +343,7 @@ def main():
         cmd_type, arg1, arg2 = parser.commandType(), parser.arg1(), parser.arg2()
         # print(cmd_type, arg1, arg2)
 
-        if cmd_type == CMD_TYPE.C_PUSH:
+        if cmd_type in (CMD_TYPE.C_PUSH, CMD_TYPE.C_POP):
             code_writer.writePushPop(cmd_type, arg1, arg2)
         elif cmd_type == CMD_TYPE.C_ARITHMETIC:
             code_writer.writeArithmetic(arg1)
