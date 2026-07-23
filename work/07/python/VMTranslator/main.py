@@ -229,6 +229,7 @@ class CodeWriter:
             "that": "THAT",
         }
         TEMP_BASE_ADDRESS = 5
+        POINTER_BASE_ADDRESS = 3
         if command == CMD_TYPE.C_PUSH and segment == "constant":
             """
             push constant n(index)が与えられたとき、以下のアセンブリコードを返す
@@ -360,6 +361,49 @@ class CodeWriter:
             M=D
             """
             address = TEMP_BASE_ADDRESS + index
+            asm = [
+                "@SP",
+                "M=M-1",
+                "A=M",
+                "D=M",
+                f"@{address}",
+                "M=D",
+            ]
+            self._file.write("\n".join(asm) + "\n")
+
+        elif command == CMD_TYPE.C_PUSH and segment == "pointer":
+            """push pointer n(index)が与えられたとき、以下のアセンブリコードを返す
+            pointer 0はRAM[3](this)、1はRAM[4](that)に対応している
+            @3+n
+            D=M
+            @SP
+            A=M
+            M=D
+            @SP
+            M=M+1
+            """
+            address = POINTER_BASE_ADDRESS + index
+            asm = [
+                f"@{address}",
+                "D=M",
+                "@SP",
+                "A=M",
+                "M=D",
+                "@SP",
+                "M=M+1",    
+            ]
+            self._file.write("\n".join(asm) + "\n")
+
+        elif command == CMD_TYPE.C_POP and segment == "pointer":
+            """pop pointer n(index)が与えられたとき、以下のアセンブリコードを返す
+            @SP
+            M=M-1
+            A=M
+            D=M
+            @3+n
+            M=D
+            """
+            address = POINTER_BASE_ADDRESS + index
             asm = [
                 "@SP",
                 "M=M-1",
