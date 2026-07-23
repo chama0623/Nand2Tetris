@@ -1,4 +1,4 @@
-import sys
+import os, sys
 from enum import Enum
 
 class CMD_TYPE(Enum):
@@ -82,6 +82,8 @@ class Parser:
 class CodeWriter:
     def __init__(self, asm_file:str) -> None:
         self._file = open(asm_file, "w", encoding="utf-8")
+        base_name = os.path.basename(asm_file) # ファイル名の先頭に含まれるパス情報を削除
+        self._filename = os.path.splitext(base_name)[0]
         self._label_count = 0
 
     def writeArithmetic(self, command:str) -> None:
@@ -410,6 +412,47 @@ class CodeWriter:
                 "A=M",
                 "D=M",
                 f"@{address}",
+                "M=D",
+            ]
+            self._file.write("\n".join(asm) + "\n")
+
+        elif command == CMD_TYPE.C_PUSH and segment == "static":
+            """push static n(index)が与えられたとき、以下のアセンブリコードを返す
+            出力するアセンブリのシンボル名はfoo.asmのとき@foo.3とする
+            @FileName.n
+            D=M
+            @SP
+            A=M
+            M=D
+            @SP
+            M=M+1
+            """
+            asm = [
+                f"@{self._filename}.{index}",
+                "D=M",
+                "@SP",
+                "A=M",
+                "M=D",
+                "@SP",
+                "M=M+1",
+            ]
+            self._file.write("\n".join(asm) + "\n")
+
+        elif command == CMD_TYPE.C_POP and segment == "static":
+            """pop static n(index)が与えられたとき、以下のアセンブリコードを返す
+            @SP
+            M=M-1
+            A=M
+            D=M
+            @Filename.n
+            M=D
+            """
+            asm = [
+                "@SP",
+                "M=M-1",
+                "A=M",
+                "D=M",
+                f"@{self._filename}.{index}",
                 "M=D",
             ]
             self._file.write("\n".join(asm) + "\n")
