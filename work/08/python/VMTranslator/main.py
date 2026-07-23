@@ -60,6 +60,12 @@ class Parser:
             return CMD_TYPE.C_PUSH
         elif first_word == "pop":
             return CMD_TYPE.C_POP
+        elif first_word == "label":
+            return CMD_TYPE.C_LABEL
+        elif first_word == "goto":
+            return CMD_TYPE.C_GOTO
+        elif first_word == "if-goto":
+            return CMD_TYPE.C_IF
         # 8章で残りのコマンドタイプを追加する.ひとまずは算術論理コマンドとpush,popしかでないと仮定する
 
     def arg1(self) -> str:
@@ -457,6 +463,28 @@ class CodeWriter:
             ]
             self._file.write("\n".join(asm) + "\n")
 
+    def writeLabel(self, label:str) -> None:
+        asm = f"({label})"
+        self._file.write(asm + "\n")
+
+    def writeGoto(self, label:str) -> None:
+        asm = [
+            f"@{label}",
+            "0;JMP",
+        ]
+        self._file.write("\n".join(asm) + "\n")
+
+    def writeIf(self, label:str):
+        asm = [
+            "@SP",
+            "M=M-1",
+            "A=M",
+            "D=M",
+            f"@{label}",
+            "D;JNE",
+        ]
+        self._file.write("\n".join(asm) + "\n")
+
     def close(self) -> None:
             self._file.close()
 
@@ -473,12 +501,18 @@ def main():
     while parser.hasMoreLines():
         parser.advance()
         cmd_type, arg1, arg2 = parser.commandType(), parser.arg1(), parser.arg2()
-        # print(cmd_type, arg1, arg2)
+        print(cmd_type, arg1, arg2)
 
         if cmd_type in (CMD_TYPE.C_PUSH, CMD_TYPE.C_POP):
             code_writer.writePushPop(cmd_type, arg1, arg2)
         elif cmd_type == CMD_TYPE.C_ARITHMETIC:
             code_writer.writeArithmetic(arg1)
+        elif cmd_type == CMD_TYPE.C_LABEL:
+            code_writer.writeLabel(arg1)
+        elif cmd_type == CMD_TYPE.C_GOTO:
+            code_writer.writeGoto(arg1)
+        elif cmd_type == CMD_TYPE.C_IF:
+            code_writer.writeIf(arg1)
 
     code_writer.close()
     print("Done!")
