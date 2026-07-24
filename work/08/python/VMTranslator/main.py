@@ -66,6 +66,10 @@ class Parser:
             return CMD_TYPE.C_GOTO
         elif first_word == "if-goto":
             return CMD_TYPE.C_IF
+        elif first_word == "function":
+            return CMD_TYPE.C_FUNCTION
+        elif first_word == "return":
+            return CMD_TYPE.C_RETURN
         # 8章で残りのコマンドタイプを追加する.ひとまずは算術論理コマンドとpush,popしかでないと仮定する
 
     def arg1(self) -> str:
@@ -485,6 +489,126 @@ class CodeWriter:
         ]
         self._file.write("\n".join(asm) + "\n")
 
+    def writeFunction(self, functionName:str, nVars:int):
+        self.writeLabel(functionName)
+        for _ in range(nVars):
+            self.writePushPop(CMD_TYPE.C_PUSH, "constant", 0)
+
+    def writeReturn(self) -> None:
+        """returnが呼び出されたとき、以下のアセンブリコードを返す
+        # frame = LCLをR13に一時的に保存
+        @LCL
+        D=M
+        @R13
+        M=D
+
+        # retAddr = frame-5, RAM[retAddr]の値=戻り先のアドレスをR14に一時的に保存
+        @5
+        A=D-A # frame-5のアドレスに移動
+        D=M # RAM[retAddr]のアドレスをDレジスタに保持
+        @R14
+        M=D
+
+        # *ARG = pop()
+        @SP # Stackの最上段に関数の戻り値が積まれているため、それをDレジスタに保持
+        AM=M-1
+        D=M
+
+        @ARG # ARGの先頭アドレスに戻り値を書き込む
+        A=M
+        M=D
+
+        # SP=ARG+1
+        @ARG
+        D=M+1
+        @SP
+        M=D
+
+        # THAT = *(frame-1)
+        @R13
+        D=M
+        @1
+        A=D-A
+        D=M
+        @THAT
+        M=D
+        
+        # THIS = *(frame-2)
+        @R13
+        D=M
+        @2
+        A=D-A
+        D=M
+        @THIS
+        M=D
+        
+        # ARG = *(frame-3)
+        @R13
+        D=M
+        @3
+        A=D-A
+        D=M
+        @ARG
+        M=D
+        
+        # LCL = *(frame-4)
+        @R13
+        D=M
+        @4
+        A=D-A
+        D=M
+        @LCL
+        M=D
+
+        # goto retAddr
+        @R14
+        A=M
+        0;JMP
+        """
+        segments = ["THAT", "THIS", "ARG", "LCL"]
+        asm = [
+            "@LCL",
+            "D=M",
+            "@R13",
+            "M=D",
+            "@5",
+            "A=D-A",
+            "D=M",
+            "@R14",
+            "M=D",
+            "@SP",
+            "AM=M-1",
+            "D=M",
+            "@ARG",
+            "A=M",
+            "M=D",
+            "@ARG",
+            "D=M+1",
+            "@SP",
+            "M=D",
+        ]
+        # 各セグメントの復元用アセンブリコード
+        for i,segment in enumerate(segments):
+            temp_asm = [
+                "@R13",
+                "D=M",
+                f"@{i+1}",
+                "A=D-A",
+                "D=M",
+                f"@{segment}",
+                "M=D",
+            ]
+            asm = asm + temp_asm
+
+        # goto retAddr用のアセンブリコード
+        asm.extend([
+            "@R14",
+            "A=M",
+            "0;JMP",
+        ])
+
+        self._file.write("\n".join(asm) + "\n")
+
     def close(self) -> None:
             self._file.close()
 
@@ -513,6 +637,10 @@ def main():
             code_writer.writeGoto(arg1)
         elif cmd_type == CMD_TYPE.C_IF:
             code_writer.writeIf(arg1)
+        elif cmd_type == CMD_TYPE.C_FUNCTION:
+            code_writer.writeFunction(arg1, arg2)
+        elif cmd_type == CMD_TYPE.C_RETURN:
+            code_writer.writeReturn()
 
     code_writer.close()
     print("Done!")
