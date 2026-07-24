@@ -12,6 +12,10 @@ class CMD_TYPE(Enum):
     C_RETURN = 7
     C_CALL = 8
 
+class SOURCE_TYPE(Enum):
+    FILE = 0
+    DIR = 1
+
 class Parser:
     def __init__(self, vm_file:str) -> None:
         self._vm_file = vm_file
@@ -96,6 +100,24 @@ class CodeWriter:
         base_name = os.path.basename(asm_file) # ファイル名の先頭に含まれるパス情報を削除
         self._filename = os.path.splitext(base_name)[0]
         self._label_count = 0 # 比較演算や関数定義のラベル生成に用いる
+
+    def writeInit(self) -> None:
+        # StackPointerを256に設定する
+        asm = [
+            "@256",
+            "D=A",
+            "@SP",
+            "M=D",
+        ]
+        self._file.write("\n".join(asm) + "\n")
+        # 最初に呼び出す関数はSys.initであるので、これの呼び出しを記載する
+        self.writeCall("Sys.init", 0)
+
+    def setFileName(self, fileName:str) -> None:
+        """Static変数はクラス名ごとに定義付けられるため、クラス(処理するvmファイル)が変わったことを伝える必要がある.
+        クラス名はファイル名に対応するためこのメソッドでファイル名を変更できる
+        """
+        self._filename = fileName
 
     def writeArithmetic(self, command:str) -> None:
         unary_operators = {
@@ -711,20 +733,28 @@ class CodeWriter:
     def close(self) -> None:
         self._file.close()
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: hackassembler <filename.vm>")
-        sys.exit(1)
+def get_source_type(path:str) -> SOURCE_TYPE:
+    """pathがファイル(.vm)であるときSOURCE_TYPE.FILE, ディレクトリであるときSOURCE_TYPE.DIRを返す
+    """
+    if os.path.isfile(path):
+        return SOURCE_TYPE.FILE
+    elif os.path.isdir(path):
+        return SOURCE_TYPE.DIR
+    raise ValueError(f"Invalid path: {path}")
 
-    vm_file = sys.argv[1]
-    asm_file = vm_file.rsplit(".", 1)[0] + ".asm"
+def translate_vm_file(vm_file:str, code_writer:CodeWriter) -> None:
+    """指定されたvmファイルを、指定されたcode_writerでアセンブリに翻訳する
+    """
+    base_name = os.path.basename(vm_file)
+    class_name = os.path.splitext(base_name)[0]
+    code_writer.setFileName(class_name)
+
     parser = Parser(vm_file)
-    code_writer = CodeWriter(asm_file)
     print(f"Translating {vm_file}...")
     while parser.hasMoreLines():
         parser.advance()
         cmd_type, arg1, arg2 = parser.commandType(), parser.arg1(), parser.arg2()
-        print(cmd_type, arg1, arg2)
+        # print(cmd_type, arg1, arg2)
 
         if cmd_type in (CMD_TYPE.C_PUSH, CMD_TYPE.C_POP):
             code_writer.writePushPop(cmd_type, arg1, arg2)
@@ -743,8 +773,40 @@ def main():
         elif cmd_type == CMD_TYPE.C_CALL:
             code_writer.writeCall(arg1, arg2)
 
-    code_writer.close()
     print("Done!")
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: hackassembler <filename.vm>")
+        sys.exit(1)
+
+    path = sys.argv[1]
+    source_type = get_source_type(path)
+    print(f"path = {path}")
+
+    vm_files = []
+    asm_file = ""
+    if source_type == SOURCE_TYPE.FILE:
+        vm_files.append(path)
+        asm_file = path.rsplit(".", 1)[0] + ".asm"
+    elif source_type == SOURCE_TYPE.DIR:
+        # os.path.normpath : 絶対値pathに変換
+        # os.path.basename : pathの最後=ディレクトリ名を取り出す
+        # pathがhoge/とhogeでディレクトリ名が変わらないように上記関数で処理している
+        dir_name = os.path.basename(os.path.normpath(path))
+        asm_file = os.path.join(path, dir_name + ".asm")
+        vm_files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith(".vm")] # vmファイルの一覧を取得
+
+    code_writer = CodeWriter(asm_file)
+    if source_type ==SOURCE_TYPE.DIR:
+        code_writer.writeInit()
+
+    for vm_file in vm_files:
+        translate_vm_file(vm_file, code_writer)
+
+    code_writer.close()
+    print("Complete translating!")
 
 if __name__ == "__main__":
     main()
