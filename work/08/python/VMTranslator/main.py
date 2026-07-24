@@ -70,7 +70,8 @@ class Parser:
             return CMD_TYPE.C_FUNCTION
         elif first_word == "return":
             return CMD_TYPE.C_RETURN
-        # 8章で残りのコマンドタイプを追加する.ひとまずは算術論理コマンドとpush,popしかでないと仮定する
+        elif first_word == "call":
+            return CMD_TYPE.C_CALL
 
     def arg1(self) -> str:
         splited_cmds = self._current_cmd.split()
@@ -94,7 +95,7 @@ class CodeWriter:
         self._file = open(asm_file, "w", encoding="utf-8")
         base_name = os.path.basename(asm_file) # ファイル名の先頭に含まれるパス情報を削除
         self._filename = os.path.splitext(base_name)[0]
-        self._label_count = 0
+        self._label_count = 0 # 比較演算や関数定義のラベル生成に用いる
 
     def writeArithmetic(self, command:str) -> None:
         unary_operators = {
@@ -609,8 +610,106 @@ class CodeWriter:
 
         self._file.write("\n".join(asm) + "\n")
 
+    def writeCall(self, functionName:str, nArgs:int) -> None:
+        """call functionName nArgsが呼び出されたとき、以下のアセンブリコードを返す
+        # push returnaddress iは一意なlabel_count
+        @functionName$ret.i
+        D=A
+        @SP
+        A=M
+        M=D
+        @SP
+        M=M+1
+
+        # push segment segment=[LCL, ARG, THIS, THAT]の値をstackにpush
+        @segment
+        D=M
+        @SP
+        A=M
+        M=D
+        @SP
+        M=M+1
+
+        # ARG=SP-5-nArgs
+        @SP
+        D=M
+        @5
+        D=D-A
+        @nArgs # アセンブリコードにnArgs値を埋め込む
+        D=D-A
+        @ARG
+        M=D
+
+        #LCL=SP
+        @SP
+        D=M
+        @LCL
+        M=D
+
+        goto function
+        @functionName # functionName$ret.iラベルではないことに注意. (functionName)はfunction f nVarsで生成される
+        0;JMP
+
+        (functionName$ret.1)
+        """
+        segments = ["LCL", "ARG", "THIS", "THAT"]
+        # push returnaddress
+        asm = [
+            f"@{functionName}$ret.{self._label_count}",
+            "D=A",
+            "@SP",
+            "A=M",
+            "M=D",
+            "@SP",
+            "M=M+1",
+        ]
+
+        # push LCL, ARG, THIS, THAT
+        for segment in segments:
+            temp_asm = [
+                f"@{segment}",
+                "D=M",
+                "@SP",
+                "A=M",
+                "M=D",
+                "@SP",
+                "M=M+1",
+            ]
+            asm = asm + temp_asm
+
+        # ARG=SP-5-nArgs
+        asm.extend([
+            "@SP",
+            "D=M",
+            "@5",
+            "D=D-A",
+            f"@{nArgs}",
+            "D=D-A",
+            "@ARG",
+            "M=D",        
+        ])
+
+        # LCL=SP
+        asm.extend([
+            "@SP",
+            "D=M",
+            "@LCL",
+            "M=D", 
+        ])
+
+        # goto function
+        # (functionName$ret.1)
+        asm.extend([
+            f"@{functionName}",
+            "0;JMP",
+            f"({functionName}$ret.{self._label_count})",
+        ])
+
+        self._file.write("\n".join(asm) + "\n")
+        self._label_count +=1
+
     def close(self) -> None:
-            self._file.close()
+        self._file.close()
 
 def main():
     if len(sys.argv) < 2:
@@ -641,6 +740,8 @@ def main():
             code_writer.writeFunction(arg1, arg2)
         elif cmd_type == CMD_TYPE.C_RETURN:
             code_writer.writeReturn()
+        elif cmd_type == CMD_TYPE.C_CALL:
+            code_writer.writeCall(arg1, arg2)
 
     code_writer.close()
     print("Done!")
