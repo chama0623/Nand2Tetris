@@ -1,0 +1,20 @@
+// one line comment
+
+a = 1;/* multiline comment pattern 1 */ a = 2;
+
+a = 1; /* multiline comment pattern2
+multiline comment 3
+multiline comment 3
+multiline comment 4 */ a = 2;
+
+a = 1;/** multiline comment for API pattern2
+multiline comment 3
+multiline comment 3
+multiline comment 4 */ a = 2;
+
+abc = "test1" + "test2"
+
+"test" + "test2"
+255 + 10
+
+0
