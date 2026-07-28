@@ -358,6 +358,9 @@ class CompilationEngine:
         while self._tokenizer.current_token == "var":
             self.compileVarDec()
 
+        #statements
+        self.compileStatements()
+
         # <symbol>}</symbol>
         self._write_xml("symbol", self._tokenizer.current_token)
         self._tokenizer.advance()
@@ -402,6 +405,227 @@ class CompilationEngine:
 
         # </varDec>
         self._xml_file.write("</varDec>\n")
+
+    def compileStatements(self) -> None:
+        # <statements>
+        self._xml_file.write("<statements>\n")
+
+        while self._tokenizer.current_token in ["let", "if", "while", "do", "return"]:
+            if self._tokenizer.current_token == "let":
+                self.compileLet()
+            elif self._tokenizer.current_token == "if":
+                self.compileIf()
+            elif self._tokenizer.current_token == "while":
+                self.compileWhile()
+            elif self._tokenizer.current_token == "do":
+                self.compileDo()
+            elif self._tokenizer.current_token == "return":
+                self.compileReturn()
+
+            # とりあえず無限ループ防止用
+            self._tokenizer.advance()
+        
+        # </statements>
+        self._xml_file.write("</statements>\n")
+
+    def compileLet(self) -> None:
+        # <letStatement>
+        self._xml_file.write("<letStatement>\n")
+
+        # <keyword>let</keyword>
+        self._write_xml("keyword", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # <identifier>varName</identifier>
+        self._write_xml("identifier", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # if ('[' expression ']')?
+        if self._tokenizer.current_token == "[":
+            # <symbol>[</symbol>
+            self._write_xml("symbol", self._tokenizer.current_token)
+            self._tokenizer.advance()
+
+            # expression
+            self.compileExpression()
+
+            # <symbol>]</symbol>
+            self._write_xml("symbol", self._tokenizer.current_token)
+            self._tokenizer.advance()
+
+        # <symbol>=</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # expression
+        self.compileExpression()
+
+        # <symbol>;</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # </letStatement>
+        self._xml_file.write("</letStatement>\n")
+
+    def compileIf(self) -> None:
+        # <ifStatement>
+        self._xml_file.write("<ifStatement>\n")
+
+        # <keyword>if</keyword>
+        self._write_xml("keyword", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # <symbol>(</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # expression
+        self.compileExpression()
+
+        # <symbol>)</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # <symbol>{</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # statements
+        self.compileStatements()
+
+        # <symbol>}</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # (else { statements })?
+        if self._tokenizer.current_token == "else":
+            # <keyword>else</keyword>
+            self._write_xml("keyword", self._tokenizer.current_token)
+            self._tokenizer.advance()   
+
+            # <symbol>{</symbol>
+            self._write_xml("symbol", self._tokenizer.current_token)
+            self._tokenizer.advance()
+
+            # statements
+            self.compileStatements()
+
+            # <symbol>}</symbol>
+            self._write_xml("symbol", self._tokenizer.current_token)
+            self._tokenizer.advance()         
+
+        # </ifStatement>
+        self._xml_file.write("</ifStatement>\n")
+
+    def compileWhile(self) -> None:
+        # <whileStatement>
+        self._xml_file.write("<whileStatement>\n")
+
+        # <symbol>(</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # expression
+        self.compileExpression()
+
+        # <symbol>)</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # <symbol>{</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # statements
+        self.compileStatements()
+
+        # <symbol>}</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance() 
+        
+        # </whileStatement>
+        self._xml_file.write("</whileStatement>\n")
+
+    def compileDo(self) -> None:
+        pass
+
+    def compileReturn(self) -> None:
+        pass
+
+    def compileExpression(self) -> None:
+        ops = ["+", "-", "*", "/", "&", "|", "<", ">", "="]
+        # <expression>
+        self._xml_file.write("<expression>\n")
+
+        # term
+        self.compileTerm()
+
+        # (op term)*
+        while self._tokenizer.current_token in ops:
+            # <symbol>op</symbol>
+            self._write_xml("symbol", self._tokenizer.current_token)
+            self._tokenizer.advance()
+
+            # term
+            self.compileTerm()
+
+        # </expression>
+        self._xml_file.write("</expression>\n")
+
+    def compileTerm(self) -> None:
+        # <term>
+        self._xml_file.write("<term>\n")
+
+        if self._tokenizer.tokenType() == TOKEN_TYPE.INT_CONST: # 正の整数定数
+            self._write_xml("integerConstant", self._tokenizer.current_token)
+            self._tokenizer.advance()
+        elif self._tokenizer.tokenType() == TOKEN_TYPE.STRING_CONST: # 文字列
+            self._write_xml("stringConstant", self._tokenizer.current_token)
+            self._tokenizer.advance()
+        elif self._tokenizer.tokenType() == TOKEN_TYPE.KEYWORD: # true, false, null
+            self._write_xml("keywordConstant", self._tokenizer.current_token)
+            self._tokenizer.advance()
+        elif self._tokenizer.tokenType() == TOKEN_TYPE.IDENTIFIER: # varName|varName[expression]
+            self._write_xml("identifier", self._tokenizer.current_token)
+            self._tokenizer.advance()
+            # if ('[' expression ']'
+            if self._tokenizer.current_token == "[":
+                # <symbol>[</symbol>
+                self._write_xml("symbol", self._tokenizer.current_token)
+                self._tokenizer.advance()
+
+                # expression
+                self.compileExpression()
+
+                # <symbol>]</symbol>
+                self._write_xml("symbol", self._tokenizer.current_token)
+                self._tokenizer.advance()
+
+        elif self._tokenizer.current_token == "(":
+            # <symbol>(</symbol>
+            self._write_xml("symbol", self._tokenizer.current_token)
+            self._tokenizer.advance()
+
+            # expression
+            self.compileExpression()
+
+            # <symbol>)</symbol>
+            self._write_xml("symbol", self._tokenizer.current_token)
+            self._tokenizer.advance()
+
+        elif self._tokenizer.current_token in ["-", "~"]:
+            # <symbol>unaryOp</symbol>
+            self._write_xml("symbol", self._tokenizer.current_token)
+            self._tokenizer.advance()
+
+            # term
+            self.compileTerm()
+        else:
+            # subroutineCallの処理をここに追記
+            pass
+        
+        # </term>
+        self._xml_file.write("</term>\n")
 
 class JackAnalyzer:
     def __init__(self, path:str):
