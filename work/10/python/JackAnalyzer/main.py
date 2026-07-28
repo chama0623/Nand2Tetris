@@ -93,7 +93,7 @@ class JackTokenizer:
 
     def _tokenize_line(self, line:str) -> list:
         tokens = []
-        while(line):
+        while line :
             token = ""
             if match := re.match(r'"[^"]*"', line): # 文字列
                 token = match.group()
@@ -229,11 +229,11 @@ class CompilationEngine:
         self._tokenizer.advance()
 
         # classVarDec
-        while(self._tokenizer.current_token in ["static", "field"]):
+        while self._tokenizer.current_token in ["static", "field"]:
             self.compileClassVarDec()
 
         # subroutineDec
-        while(self._tokenizer.current_token in ["constructor", "function", "method"]):
+        while self._tokenizer.current_token in ["constructor", "function", "method"]:
             self.compileSubroutine()
 
         # <symbol> } </symbol>
@@ -265,7 +265,7 @@ class CompilationEngine:
         self._write_xml("identifier", self._tokenizer.current_token)
         self._tokenizer.advance()
 
-        while(self._tokenizer.current_token != ";"):
+        while self._tokenizer.current_token != ";":
             # <symbol>,</symbol>
             self._write_xml("symbol", self._tokenizer.current_token)
             self._tokenizer.advance()
@@ -314,6 +314,7 @@ class CompilationEngine:
         self._tokenizer.advance()
 
         # subroutineBody
+        self.compileSubroutineBody()
 
         # </subroutineDec>
         self._xml_file.write("</subroutineDec>\n")
@@ -322,7 +323,7 @@ class CompilationEngine:
         # <parameterList>
         self._xml_file.write("<parameterList>\n")
 
-        while(self._tokenizer.current_token != ")"):
+        while self._tokenizer.current_token != ")":
             # if type in [int, char, boolean]  
             #   <keyword>type</keyword>
             # else(type is className)
@@ -344,6 +345,63 @@ class CompilationEngine:
 
         # </parameterList>
         self._xml_file.write("</parameterList>\n")
+
+    def compileSubroutineBody(self) -> None:
+        # <subroutineBody>
+        self._xml_file.write("<subroutineBody>\n")
+
+        # <symbol>{</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        #varDec
+        while self._tokenizer.current_token == "var":
+            self.compileVarDec()
+
+        # <symbol>}</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # </subroutineBody>
+        self._xml_file.write("</subroutineBody>\n")
+
+    def compileVarDec(self) -> None:
+        # <varDec>
+        self._xml_file.write("<varDec>\n")
+
+        # <keyword>var</keyword>
+        self._write_xml("keyword", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # if type in [int, char, boolean]  
+        #   <keyword>type</keyword>
+        # else(type is className)
+        #   <identifier>className</identifier>
+        if self._tokenizer.current_token in ["int", "char", "boolean"]:
+            self._write_xml("keyword", self._tokenizer.current_token)
+        else:
+            self._write_xml("identifier", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        # <identifier>varName</identifier>
+        self._write_xml("identifier", self._tokenizer.current_token)
+        self._tokenizer.advance()
+
+        while self._tokenizer.current_token != ";":
+            # <symbol>,</symbol>
+            self._write_xml("symbol", self._tokenizer.current_token)
+            self._tokenizer.advance() 
+
+            # <identifier>varName</identifier>
+            self._write_xml("identifier", self._tokenizer.current_token)
+            self._tokenizer.advance()
+
+        # <symbol>;</symbol>
+        self._write_xml("symbol", self._tokenizer.current_token)
+        self._tokenizer.advance() 
+
+        # </varDec>
+        self._xml_file.write("</varDec>\n")
 
 class JackAnalyzer:
     def __init__(self, path:str):

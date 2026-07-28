@@ -32,6 +32,12 @@
 <identifier>Asize</identifier>
 </parameterList>
 <symbol>)</symbol>
-</subroutineDec>
+<subroutineBody>
 <symbol>{</symbol>
+<varDec>
+</varDec>
+<symbol>let</symbol>
+</subroutineBody>
+</subroutineDec>
+<symbol>x</symbol>
 </class>

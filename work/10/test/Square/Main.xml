@@ -16,6 +16,16 @@
 <parameterList>
 </parameterList>
 <symbol>)</symbol>
-</subroutineDec>
+<subroutineBody>
 <symbol>{</symbol>
+<varDec>
+<keyword>var</keyword>
+<identifier>SquareGame</identifier>
+<identifier>game</identifier>
+<symbol>;</symbol>
+</varDec>
+<symbol>let</symbol>
+</subroutineBody>
+</subroutineDec>
+<symbol>game</symbol>
 </class>
