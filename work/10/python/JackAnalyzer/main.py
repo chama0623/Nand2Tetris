@@ -46,19 +46,18 @@ def get_source_type(path:str) -> SOURCE_TYPE:
 
 class JackTokenizer:
     def __init__(self, jack_file:str) -> None:
-        self._jack_file = jack_file
         self._tokens = []
         self._current_idx = -1
-        self._current_token = ""
+        self.current_token = ""
         self._key_words = ["class", "constructor", "function", "method", "field", "static", "var", "int", "char", "boolean", "void",
                      "true", "false", "null", "this", "let", "do", "if", "else", "while", "return"]
         self._symbols = ["{", "}", "(", ")", "[", "]", ".", ",", ".", ";", "+", "-", "*", "/", "&", "|", "<", ">", "=", "~"]
 
-        with open(self._jack_file, "r", encoding="utf-8") as f:
+        with open(jack_file, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
         lines = self._clean_lines(lines)
-        print(lines)
+
         for l in lines:
             self._tokens = self._tokens + self._tokenize_line(l)
         print(self._tokens)
@@ -131,16 +130,16 @@ class JackTokenizer:
     def advance(self):
         if self.hasMoreTokens():
             self._current_idx += 1
-            self._current_token = self._tokens[self._current_idx]
+            self.current_token = self._tokens[self._current_idx]
 
     def tokenType(self) -> TOKEN_TYPE:
-        if re.match(r'"[^"]*"', self._current_token):
+        if re.match(r'"[^"]*"', self.current_token):
             return TOKEN_TYPE.STRING_CONST
-        elif re.match(r'\d+', self._current_token):
+        elif re.match(r'\d+', self.current_token):
             return TOKEN_TYPE.INT_CONST
-        elif self._current_token in self._symbols:
+        elif self.current_token in self._symbols:
             return TOKEN_TYPE.SYMBOL
-        elif self._current_token in self._key_words:
+        elif self.current_token in self._key_words:
             return TOKEN_TYPE.KEYWORD
         else:
             return TOKEN_TYPE.IDENTIFIER
@@ -171,32 +170,131 @@ class JackTokenizer:
             "return": KEYWORD_TYPE.RETURN
                     }
 
-        if self._current_token in key_words:
-            return key_words.get(self._current_token)
+        if self.current_token in key_words:
+            return key_words.get(self.current_token)
 
     def symbol(self) -> str:
         if self.tokenType() == TOKEN_TYPE.SYMBOL:
-            return self._current_token
+            return self.current_token
         else:
             return None
 
     def identifier(self) -> str:
         if self.tokenType() == TOKEN_TYPE.IDENTIFIER:
-            return self._current_token
+            return self.current_token
         else:
             return None
 
     def intVal(self) -> int:
         if self.tokenType() == TOKEN_TYPE.INT_CONST:
-            return int(self._current_token)
+            return int(self.current_token)
         else:
             return None
 
     def stringVal(self) -> str:
         if self.tokenType() == TOKEN_TYPE.STRING_CONST:
-            return self._current_token
+            return self.current_token
         else:
             return None
+
+class CompilationEngine:
+    def __init__(self, jack_file:str, xml_file:str):
+        self._xml_file = open(xml_file, "w", encoding="utf-8")
+        self._tokenizer = JackTokenizer(jack_file)
+
+    def _write_xml(self, tag:str, value:str) -> str:
+        self._xml_file.write(f"<{tag}>{value}</{tag}>\n") 
+
+    def close(self) -> None:
+        self._xml_file.close()
+
+    def compileClass(self) -> None:
+        if not self._tokenizer.hasMoreTokens():
+            return 
+
+        # <class>
+        self._tokenizer.advance()
+        self._xml_file.write("<class>\n")
+
+        # <keyword>class</keyword>
+        self._write_xml("keyword", self._tokenizer.current_token)
+
+        # <identifier>className</identifier>
+        self._tokenizer.advance()
+        self._write_xml("identifier", self._tokenizer.current_token)
+
+        # <symbol> } </symbol>
+        self._tokenizer.advance()
+        self._write_xml("symbol", self._tokenizer.current_token)
+
+        # classVarDec
+        self._tokenizer.advance()
+        while(self._tokenizer.current_token in ["static", "field"]):
+            self.compileClassVarDec()
+
+        
+
+        # <symbol> { </symbol>
+        # このメソッドは上記jackファイルに対する処理が完成したときに正常に動作する
+        self._tokenizer.advance()
+        self._write_xml("symbol", self._tokenizer.current_token)
+
+        # </class>
+        self._xml_file.write("</class>\n")
+
+    def compileClassVarDec(self) -> None:
+        # <classVarDec>
+        self._xml_file.write("<classVarDec>\n")
+
+        # <keyword>static|field</keyword>
+        self._write_xml("keyword", self._tokenizer.current_token)
+
+        # <keyword>type</keyword>
+        self._tokenizer.advance()
+        self._write_xml("keyword", self._tokenizer.current_token)
+
+        # <identifier>varName</identifier>
+        self._tokenizer.advance()
+        self._write_xml("identifier", self._tokenizer.current_token)
+
+        self._tokenizer.advance()
+        while(self._tokenizer.current_token != ";"):
+            # <symbol>,</symbol>
+            self._write_xml("symbol", self._tokenizer.current_token)
+
+            # <identifier>varName</identifier>
+            self._tokenizer.advance()
+            self._write_xml("identifier", self._tokenizer.current_token)
+
+            # <symbol>;</symbol>
+            self._tokenizer.advance()
+        
+        self._write_xml("symbol", self._tokenizer.current_token)
+
+        # </classVarDec>
+        self._xml_file.write("</classVarDec>\n")
+        self._tokenizer.advance()
+
+        
+
+class JackAnalyzer:
+    def __init__(self, path:str):
+        source_type = get_source_type(path)
+
+        self._jack_files = []
+        if source_type == SOURCE_TYPE.FILE:
+            self._jack_files.append(path)
+        elif source_type == SOURCE_TYPE.DIR:
+            self._jack_files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith(".jack")]
+
+    def analyze(self) -> None:
+        for jack_file in self._jack_files:
+            xml_file = jack_file.rsplit(".", 1)[0] + ".xml"
+            print(f"Compiling: {jack_file} -> {xml_file}")
+
+            engine = CompilationEngine(jack_file, xml_file)
+            engine.compileClass()
+            engine.close()
 
 def main():
     if len(sys.argv) < 2:
@@ -204,33 +302,10 @@ def main():
         sys.exit(1)
 
     path = sys.argv[1]
-    source_type = get_source_type(path)
-    print(f"path = {path}")
 
-    jack_files = []
-    xml_file = ""
-    if source_type == SOURCE_TYPE.FILE:
-        jack_files.append(path)
-        xml_file = path.rsplit(".", 1)[0] + ".xml"
+    jack_analyzer = JackAnalyzer(path)
+    jack_analyzer.analyze()
 
-    print(xml_file)
-    jack_tokenizer = JackTokenizer(jack_files[0])
-    while(jack_tokenizer.hasMoreTokens()):
-        jack_tokenizer.advance()
-        token_type = jack_tokenizer.tokenType()
-        content = ""
-        if token_type == TOKEN_TYPE.KEYWORD:
-            content = jack_tokenizer.keyword()
-        elif token_type == TOKEN_TYPE.SYMBOL:
-            content = jack_tokenizer.symbol()
-        elif token_type == TOKEN_TYPE.IDENTIFIER:
-            content = jack_tokenizer.identifier()
-        elif token_type == TOKEN_TYPE.INT_CONST:
-            content = jack_tokenizer.intVal()
-        elif token_type == TOKEN_TYPE.STRING_CONST:
-            content = jack_tokenizer.stringVal()
-
-        print(f"{jack_tokenizer._current_token}, {token_type}, {content}")
 
 if __name__ == "__main__":
     main()
