@@ -193,7 +193,7 @@ class JackTokenizer:
 
     def stringVal(self) -> str:
         if self.tokenType() == TOKEN_TYPE.STRING_CONST:
-            return self.current_token
+            return self.current_token[1:-1]
         else:
             return None
 
@@ -647,10 +647,10 @@ class CompilationEngine:
             self._write_xml("integerConstant", self._tokenizer.current_token)
             self._tokenizer.advance()
         elif self._tokenizer.tokenType() == TOKEN_TYPE.STRING_CONST: # 文字列
-            self._write_xml("stringConstant", self._tokenizer.current_token)
+            self._write_xml("stringConstant", self._tokenizer.stringVal())
             self._tokenizer.advance()
         elif self._tokenizer.tokenType() == TOKEN_TYPE.KEYWORD: # true, false, null
-            self._write_xml("keywordConstant", self._tokenizer.current_token)
+            self._write_xml("keyword", self._tokenizer.current_token)
             self._tokenizer.advance()
         elif self._tokenizer.tokenType() == TOKEN_TYPE.IDENTIFIER: # varName|varName[expression]|subroutineCall
             self._write_xml("identifier", self._tokenizer.current_token)
