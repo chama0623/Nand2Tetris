@@ -50,6 +50,9 @@ class JackTokenizer:
         self._tokens = []
         self._current_idx = -1
         self._current_token = ""
+        self._key_words = ["class", "constructor", "function", "method", "field", "static", "var", "int", "char", "boolean", "void",
+                     "true", "false", "null", "this", "let", "do", "if", "else", "while", "return"]
+        self._symbols = ["{", "}", "(", ")", "[", "]", ".", ",", ".", ";", "+", "-", "*", "/", "&", "|", "<", ">", "=", "~"]
 
         with open(self._jack_file, "r", encoding="utf-8") as f:
             lines = f.readlines()
@@ -90,10 +93,6 @@ class JackTokenizer:
         return cleaned_lines
 
     def _tokenize_line(self, line:str) -> list:
-        key_words = ["class", "constructor", "function", "method", "field", "static", "var", "int", "char", "boolean", "void",
-                     "true", "false", "null", "this", "let", "do", "if", "else", "while", "return"]
-        symbols = ["{", "}", "(", ")", "[", "]", ".", ",", ".", ";", "+", "-", "*", "/", "&", "|", "<", ">", "=", "~"]
-
         tokens = []
         while(line):
             token = ""
@@ -101,7 +100,7 @@ class JackTokenizer:
                 token = match.group()
             elif match := re.match(r'\d+', line): # 整数定数
                 token = match.group()
-            elif line[0] in symbols: # 先頭がシンボル
+            elif line[0] in self._symbols: # 先頭がシンボル
                 token = line[0]
             else:
                 """
@@ -134,10 +133,74 @@ class JackTokenizer:
             self._current_idx += 1
             self._current_token = self._tokens[self._current_idx]
 
+    def tokenType(self) -> TOKEN_TYPE:
+        if re.match(r'"[^"]*"', self._current_token):
+            return TOKEN_TYPE.STRING_CONST
+        elif re.match(r'\d+', self._current_token):
+            return TOKEN_TYPE.INT_CONST
+        elif self._current_token in self._symbols:
+            return TOKEN_TYPE.SYMBOL
+        elif self._current_token in self._key_words:
+            return TOKEN_TYPE.KEYWORD
+        else:
+            return TOKEN_TYPE.IDENTIFIER
+
+
+    def keyword(self) -> KEYWORD_TYPE:
+        key_words = {
+            "class": KEYWORD_TYPE.CLASS,
+            "constructor": KEYWORD_TYPE.CONSTRUCTOR,
+            "function": KEYWORD_TYPE.FUNCTION,
+            "method": KEYWORD_TYPE.METHOD,
+            "field": KEYWORD_TYPE.FIELD,
+            "static": KEYWORD_TYPE.STATIC,
+            "var": KEYWORD_TYPE.VAR,
+            "int": KEYWORD_TYPE.INT,
+            "char": KEYWORD_TYPE.CHAR,
+            "boolean": KEYWORD_TYPE.BOOLEAN,
+            "void": KEYWORD_TYPE.VOID,
+            "true": KEYWORD_TYPE.TRUE, 
+            "false": KEYWORD_TYPE.FALSE, 
+            "null": KEYWORD_TYPE.NULL, 
+            "this": KEYWORD_TYPE.THIS,
+            "let": KEYWORD_TYPE.LET, 
+            "do": KEYWORD_TYPE.DO,
+            "if": KEYWORD_TYPE.IF, 
+            "else": KEYWORD_TYPE.ELSE, 
+            "while": KEYWORD_TYPE.WHILE, 
+            "return": KEYWORD_TYPE.RETURN
+                    }
+
+        if self._current_token in key_words:
+            return key_words.get(self._current_token)
+
+    def symbol(self) -> str:
+        if self.tokenType() == TOKEN_TYPE.SYMBOL:
+            return self._current_token
+        else:
+            return None
+
+    def identifier(self) -> str:
+        if self.tokenType() == TOKEN_TYPE.IDENTIFIER:
+            return self._current_token
+        else:
+            return None
+
+    def intVal(self) -> int:
+        if self.tokenType() == TOKEN_TYPE.INT_CONST:
+            return int(self._current_token)
+        else:
+            return None
+
+    def stringVal(self) -> str:
+        if self.tokenType() == TOKEN_TYPE.STRING_CONST:
+            return self._current_token
+        else:
+            return None
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: hackassembler <filename.vm>")
+        print("Usage: JackAnalyzer <filename.jack>")
         sys.exit(1)
 
     path = sys.argv[1]
@@ -152,6 +215,22 @@ def main():
 
     print(xml_file)
     jack_tokenizer = JackTokenizer(jack_files[0])
+    while(jack_tokenizer.hasMoreTokens()):
+        jack_tokenizer.advance()
+        token_type = jack_tokenizer.tokenType()
+        content = ""
+        if token_type == TOKEN_TYPE.KEYWORD:
+            content = jack_tokenizer.keyword()
+        elif token_type == TOKEN_TYPE.SYMBOL:
+            content = jack_tokenizer.symbol()
+        elif token_type == TOKEN_TYPE.IDENTIFIER:
+            content = jack_tokenizer.identifier()
+        elif token_type == TOKEN_TYPE.INT_CONST:
+            content = jack_tokenizer.intVal()
+        elif token_type == TOKEN_TYPE.STRING_CONST:
+            content = jack_tokenizer.stringVal()
+
+        print(f"{jack_tokenizer._current_token}, {token_type}, {content}")
 
 if __name__ == "__main__":
     main()
