@@ -8,5 +8,14 @@
 <identifier>test</identifier>
 <symbol>;</symbol>
 </classVarDec>
-<symbol>function</symbol>
+<subroutineDec>
+<keyword>function</keyword>
+<keyword>void</keyword>
+<identifier>main</identifier>
+<symbol>(</symbol>
+<parameterList>
+</parameterList>
+<symbol>)</symbol>
+</subroutineDec>
+<symbol>{</symbol>
 </class>
