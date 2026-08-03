@@ -42,6 +42,27 @@ class KIND_TYPE(Enum):
     VAR = auto()
     NONE = auto()
 
+class SEGMENT_TYPE(Enum):
+    CONSTANT = auto()
+    ARGUMENT = auto()
+    LOCAL = auto()
+    STATIC = auto()
+    THIS = auto()
+    THAT = auto()
+    POINTER = auto()
+    TEMP = auto()
+
+class COMMAND_TYPE(Enum):
+    ADD = auto()
+    SUB = auto()
+    NEG = auto()
+    EQ = auto()
+    GT = auto()
+    LT = auto()
+    AND = auto()
+    OR = auto()
+    NOT = auto()
+
 def get_source_type(path:str) -> SOURCE_TYPE:
     """pathがファイル(.jack)であるときSOURCE_TYPE.FILE, ディレクトリであるときSOURCE_TYPE.DIRを返す
     """
@@ -817,6 +838,73 @@ class SymbolTable:
                     return i 
         return None
 
+class VMWriter:
+    def __init__(self, vm_file:str) -> None:
+        self._vm_file = open(vm_file, "w", encoding="utf-8")
+
+    def writePush(self, segment:SEGMENT_TYPE, index:int) -> None:
+        segment_map = {
+            SEGMENT_TYPE.CONSTANT: "constant",
+            SEGMENT_TYPE.ARGUMENT: "argument",
+            SEGMENT_TYPE.LOCAL: "local",
+            SEGMENT_TYPE.STATIC: "static",
+            SEGMENT_TYPE.THIS: "this",
+            SEGMENT_TYPE.THAT: "that",
+            SEGMENT_TYPE.POINTER: "pointer",
+            SEGMENT_TYPE.TEMP: "temp",
+        }
+        segment_str = segment_map.get(segment, "")
+        self._vm_file.write(f"push {segment_str} {index}\n")
+
+    def writePop(self, segment:SEGMENT_TYPE, index:int) -> None:
+        segment_map = {
+            SEGMENT_TYPE.ARGUMENT: "argument",
+            SEGMENT_TYPE.LOCAL: "local",
+            SEGMENT_TYPE.STATIC: "static",
+            SEGMENT_TYPE.THIS: "this",
+            SEGMENT_TYPE.THAT: "that",
+            SEGMENT_TYPE.POINTER: "pointer",
+            SEGMENT_TYPE.TEMP: "temp",
+        }
+        segment_str = segment_map.get(segment, "")
+        self._vm_file.write(f"pop {segment_str} {index}\n")
+
+    def writeArithmetic(self, command:COMMAND_TYPE) -> None:
+        command_map = {
+            COMMAND_TYPE.ADD: "add",
+            COMMAND_TYPE.SUB: "sub",
+            COMMAND_TYPE.NEG: "neg",
+            COMMAND_TYPE.EQ: "eq",
+            COMMAND_TYPE.GT: "gt",
+            COMMAND_TYPE.LT: "lt",
+            COMMAND_TYPE.AND: "and",
+            COMMAND_TYPE.OR: "or",
+            COMMAND_TYPE.NOT: "not",
+        }
+        command_str = command_map.get(command, "")
+        self._vm_file.write(f"{command_str}\n")
+
+    def writeLabel(self, label:str) -> None:
+        self._vm_file.write(f"label {label}\n")
+
+    def writeGoto(self, label:str) -> None:
+        self._vm_file.write(f"goto {label}\n")
+
+    def writeIf(self, label:str) -> None:
+        self._vm_file.write(f"if-goto {label}\n")
+
+    def writeCall(self, name:str, nargs:int) -> None:
+        self._vm_file.write(f"call {name} {nargs}\n")
+
+    def writeFunction(self, name:str, nvars:int) -> None:
+        self._vm_file.write(f"function {name} {nvars}\n") 
+
+    def writeReturn(self) -> None:
+        self._vm_file.write(f"return\n") 
+
+    def close(self) -> None:
+        self._vm_file.close()
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: JackAnalyzer <filename.jack>")
@@ -827,12 +915,11 @@ def main():
     # jack_analyzer = JackAnalyzer(path)
     # jack_analyzer.analyze()
 
-    sym_table =  SymbolTable()
-    sym_table.define("a", "int", "STATIC")
-    sym_table.define("b", "int", "STATIC")
-    sym_table.define("c", "int", "FIELD")
-    print(sym_table)
-    print(sym_table.varCount("STATIC"))
+    vm_writer = VMWriter(path)
+    vm_writer.writePush(SEGMENT_TYPE.CONSTANT, 3)
+    vm_writer.writePush(SEGMENT_TYPE.LOCAL, 4)
+    vm_writer.writeArithmetic(COMMAND_TYPE.LT)
+    vm_writer.close()
 
 
 if __name__ == "__main__":
