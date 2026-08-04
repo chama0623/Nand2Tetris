@@ -1,3 +1,0 @@
-push constant 3
-push local 4
-lt
