@@ -235,6 +235,9 @@ class CompilationEngine:
         self._vm_writer.close()
 
     def compileClass(self) -> None:
+        # クラス用のシンボルテーブル
+        self._class_table = SymbolTable()
+
         if not self._tokenizer.hasMoreTokens():
             return 
         self._tokenizer.advance()
@@ -249,10 +252,9 @@ class CompilationEngine:
         # symbol {
         self._tokenizer.advance()
 
-        # ConvertToBinでの検証のため、classVarDecはとりあえずないものと仮定
         # classVarDec
-        # while self._tokenizer.current_token in ["static", "field"]:
-        #     self.compileClassVarDec()
+        while self._tokenizer.current_token in ["static", "field"]:
+             self.compileClassVarDec()
 
         # subroutineDec
         while self._tokenizer.current_token in ["constructor", "function", "method"]:
@@ -260,65 +262,50 @@ class CompilationEngine:
 
         # symbol }
 
-
     def compileClassVarDec(self) -> None:
-        # <classVarDec>
-        self._xml_file.write("<classVarDec>\n")
-
-        # <keyword>static|field</keyword>
-        self._write_xml("keyword", self._tokenizer.current_token)
+        # keyword static|field
+        _kind = KIND_TYPE.STATIC if self._tokenizer.current_token == "static" else KIND_TYPE.FIELD
         self._tokenizer.advance()
 
         # if type in [int, char, boolean]  
         #   <keyword>type</keyword>
         # else(type is className)
         #   <identifier>className</identifier>
-        if self._tokenizer.current_token in ["int", "char", "boolean"]:
-            self._write_xml("keyword", self._tokenizer.current_token)
-        else:
-            self._write_xml("identifier", self._tokenizer.current_token)
+        _type = self._tokenizer.current_token
         self._tokenizer.advance()
 
-        # <identifier>varName</identifier>
-        self._write_xml("identifier", self._tokenizer.current_token)
+        # identifier varName
+        _name = self._tokenizer.current_token
         self._tokenizer.advance()
+
+        self._class_table.define(_name, _type, _kind)
 
         while self._tokenizer.current_token != ";":
-            # <symbol>,</symbol>
-            self._write_xml("symbol", self._tokenizer.current_token)
+            # symbol ,
             self._tokenizer.advance()
             
-            # <identifier>varName</identifier>
-            self._write_xml("identifier", self._tokenizer.current_token)
+            # identifier varName
+            _name = self._tokenizer.current_token
             self._tokenizer.advance()
 
-        # <symbol>;</symbol>
-        self._write_xml("symbol", self._tokenizer.current_token)
+            self._class_table.define(_name, _type, _kind)
 
-        # </classVarDec>
-        self._xml_file.write("</classVarDec>\n")
+        # symbol ;
         self._tokenizer.advance()
 
     def compileSubroutine(self) -> None:
+        # self._label_index = 0
         # サブルーチン用のシンボルテーブル
         self._subroutine_table = SymbolTable()
 
         # keyword constructor|function|method
-        subroutine_type = self._tokenizer.current_token
+        self._subroutine_type = self._tokenizer.current_token
         self._tokenizer.advance()
 
-        if subroutine_type == "method":
+        if self._subroutine_type == "method":
             self._subroutine_table.define("this", self._class_name, KIND_TYPE.ARG)
 
-        # 戻り値はvmの記載に寄与しないためスキップ
-        # if return-type in [void, int, char, boolean]  
-        #   <keyword>type</keyword>
-        # else (type is className)
-        #   <identifier>className</identifier>
-        # if self._tokenizer.current_token in ["void", "int", "char", "boolean"]:
-        #     self._write_xml("keyword", self._tokenizer.current_token)
-        # else:
-        #     self._write_xml("identifier", self._tokenizer.current_token)
+        # 戻り値の型をスキップ
         self._tokenizer.advance()
 
         # identifier subroutineName
@@ -354,20 +341,26 @@ class CompilationEngine:
                 self._tokenizer.advance() 
 
     def compileSubroutineBody(self) -> None:
-        var_count = 0
         # symbol {
         self._tokenizer.advance()
 
-        #varDec
+        # varDec
         while self._tokenizer.current_token == "var":
             self.compileVarDec()
 
         var_count = self._subroutine_table.varCount(KIND_TYPE.VAR)
-
-        # function className.functionName varCountを書き込む
         self._vm_writer.writeFunction(f"{self._class_name}.{self._subroutine_name}", var_count)
 
-        #statements
+        if self._subroutine_type == "method":
+            self._vm_writer.writePush(SEGMENT_TYPE.ARGUMENT, 0)
+            self._vm_writer.writePop(SEGMENT_TYPE.POINTER, 0)
+        elif self._subroutine_type == "constructor":
+            field_count = self._class_table.varCount(KIND_TYPE.FIELD)
+            self._vm_writer.writePush(SEGMENT_TYPE.CONSTANT, field_count)
+            self._vm_writer.writeCall("Memory.alloc", 1)
+            self._vm_writer.writePop(SEGMENT_TYPE.POINTER, 0)
+
+        # statements
         self.compileStatements()
 
         # symbol }
@@ -430,29 +423,51 @@ class CompilationEngine:
         }
         return mapping.get(kind)
 
+    def _lookup_var(self, name:str) ->tuple:
+        """
+        サブルーチンレベルのシンボルテーブルでnameを検索し、見つかった場合は(kind, index, type)を返す.
+        サブルーチンレベルのシンボルテーブルで見つからない場合は、クラスレベルのシンボルテーブルを検索する.
+        どちらのシンボルテーブルにも見つからない場合、(None, None, None)を返す
+        """
+        kind = self._subroutine_table.kindOf(name)
+        if kind is not None and kind != KIND_TYPE.NONE:
+            return kind, self._subroutine_table.indexOf(name), self._subroutine_table.typeOf(name)
+
+        kind = self._class_table.kindOf(name)
+        if kind is not None and kind != KIND_TYPE.NONE:
+            return kind, self._class_table.indexOf(name), self._class_table.typeOf(name)
+            
+        return None, None, None
+
     def compileLet(self) -> None:
         # keyword let
         self._tokenizer.advance()
 
         # identifier varName
         _var_name = self._tokenizer.current_token
-        _kind = self._subroutine_table.kindOf(_var_name)
+        _kind, _index, _ = self._lookup_var(_var_name)
         _segment = self._kind_to_segment(_kind)
-        _index = self._subroutine_table.indexOf(_var_name)
         self._tokenizer.advance()
+        is_array = False
 
-        # if ('[' expression ']')? 配列参照は後程実装
-        # if self._tokenizer.current_token == "[":
-        #     # <symbol>[</symbol>
-        #     self._write_xml("symbol", self._tokenizer.current_token)
-        #     self._tokenizer.advance()
+        # if ('[' expression ']')?
+        if self._tokenizer.current_token == "[":
+            is_array = True
+            # 配列のベースアドレスをpush
+            _segment = self._kind_to_segment(_kind)
+            self._vm_writer.writePush(_segment, _index)
 
-        #     # expression
-        #     self.compileExpression()
+            # symbol [
+            self._tokenizer.advance()
 
-        #     # <symbol>]</symbol>
-        #     self._write_xml("symbol", self._tokenizer.current_token)
-        #     self._tokenizer.advance()
+            # expression
+            self.compileExpression()
+
+            # <symbol>]</symbol>
+            self._tokenizer.advance()
+
+            # 配列のベースアドレス + indexで実際にアクセスするアドレスを求める
+            self._vm_writer.writeArithmetic(COMMAND_TYPE.ADD)
 
         # symbol =
         self._tokenizer.advance()
@@ -463,8 +478,14 @@ class CompilationEngine:
         # symbol ;
         self._tokenizer.advance()
 
-        # pop varName(kind index)
-        self._vm_writer.writePop(_segment, _index)
+        if is_array:
+            self._vm_writer.writePop(SEGMENT_TYPE.TEMP, 0)     # 右辺の値を一時退避
+            self._vm_writer.writePop(SEGMENT_TYPE.POINTER, 1)  # アドレスを THAT にセット
+            self._vm_writer.writePush(SEGMENT_TYPE.TEMP, 0)    # 右辺の値を復元
+            self._vm_writer.writePop(SEGMENT_TYPE.THAT, 0)     # THAT 0 にポップ
+        else:
+            # pop varName(kind index)
+            self._vm_writer.writePop(_segment, _index)
 
     def _get_label(self) ->str:
         _label = f"{self._class_name}_{self._label_index}"
@@ -495,54 +516,50 @@ class CompilationEngine:
         # symbol (
         self._tokenizer.advance()
 
-        # expression0
+        # expression
         self.compileExpression()
-
-        # not
-        self._vm_writer.writeArithmetic(COMMAND_TYPE.NOT)
 
         # symbol )
         self._tokenizer.advance()
 
-        # if-goto L1
-        _label1 = self._get_label()
-        self._vm_writer.writeIf(_label1)
+        # 条件が偽のときのジャンプ先ラベル
+        _label_false = self._get_label()
+        
+        # 条件式の結果を反転して偽のときにジャンプさせる
+        self._vm_writer.writeArithmetic(COMMAND_TYPE.NOT)
+        self._vm_writer.writeIf(_label_false)
 
         # symbol {
         self._tokenizer.advance()
-
-        # statements1
+        # statements
         self.compileStatements()
-
         # symbol }
         self._tokenizer.advance()
 
-        # (else { statements })?
         if self._tokenizer.current_token == "else":
+            _label_end = self._get_label()
+            self._vm_writer.writeGoto(_label_end)
+            
+            self._vm_writer.writeLabel(_label_false)
+            
             # keyword else
-            self._tokenizer.advance()   
-
-            # goto L2
-            _label2 = self._get_label()
-            self._vm_writer.writeGoto(_label2)
-
-            # label L1
-            self._vm_writer.writeLabel(_label1)
+            self._tokenizer.advance()
 
             # symbol {
             self._tokenizer.advance()
 
-            # statements
             self.compileStatements()
 
             # symbol }
             self._tokenizer.advance()
-
-            # label L2
-            self._vm_writer.writeLabel(_label2) 
+            
+            self._vm_writer.writeLabel(_label_end)
         else:
-            # label L1
-            self._vm_writer.writeLabel(_label1)
+            # elseがない場合、正解にあるような連続ラベル構造（gotoとlabelのペア）を再現
+            _label_end = self._get_label()
+            self._vm_writer.writeGoto(_label_end)
+            self._vm_writer.writeLabel(_label_false)
+            self._vm_writer.writeLabel(_label_end)
             
     def compileWhile(self) -> None:
         # keyword while
@@ -588,25 +605,28 @@ class CompilationEngine:
         # keyword do
         self._tokenizer.advance()
 
-        # subroutineCall
-        # subroutineName | (className|varName)
+        # subroutineCall: subroutineName | (className|varName)
         _sub_routine_name = self._tokenizer.current_token
+        _kind, _index, _type = self._lookup_var(_sub_routine_name)
         self._tokenizer.advance()
 
         # if subroutineCall subroutineName(expressionList)
         if self._tokenizer.current_token == "(":
+            # 自クラスのメソッドを直接呼ぶ場合（例: draw()）
+            _callee_name = self._class_name
+            _sub_method_name = _sub_routine_name
+            self._vm_writer.writePush(SEGMENT_TYPE.POINTER, 0)
+            _expression_count += 1
+
             # symbol (
             self._tokenizer.advance()
-
             # expressionList
-            _expression_count = self.compileExpressionList()
-
+            _expression_count += self.compileExpressionList()
             # symbol )
             self._tokenizer.advance()
 
-        _sub_method_name = ""
         # if subroutineCall (className|varName).subroutineName(expressionList)
-        if self._tokenizer.current_token == ".":
+        elif self._tokenizer.current_token == ".":
             # symbol .
             self._tokenizer.advance()
 
@@ -614,11 +634,21 @@ class CompilationEngine:
             _sub_method_name = self._tokenizer.current_token
             self._tokenizer.advance()
 
+            if _kind is not None and _kind != KIND_TYPE.NONE:
+                # 変数(オブジェクト)のメソッドなら、thisをstackに積む
+                _segment = self._kind_to_segment(_kind)
+                self._vm_writer.writePush(_segment, _index)
+                _expression_count += 1
+                _callee_name = _type
+            else:
+                # クラス名直接の場合（例: SquareGame.new など）
+                _callee_name = _sub_routine_name
+
             # symbol (
             self._tokenizer.advance()
 
             # expressionList
-            _expression_count = self.compileExpressionList()
+            _expression_count += self.compileExpressionList()
 
             # symbol )
             self._tokenizer.advance()
@@ -626,15 +656,10 @@ class CompilationEngine:
         # symbol ;
         self._tokenizer.advance()
 
-        if _sub_method_name:
-            _full_name = f"{_sub_routine_name}.{_sub_method_name}"
-        else:
-            # do function()のときは暗黙的にクラス名は自クラス
-            # ClassName.function
-            _full_name = f"{self._class_name}.{_sub_routine_name}"
+        _full_name = f"{_callee_name}.{_sub_method_name}"
         self._vm_writer.writeCall(_full_name, _expression_count)
 
-        # doの場合引数は関係ないため、do function()でstackに積まれた0をpopする
+        # doの場合、返り値（void）を破棄するためにスタック上の値をポップする
         self._vm_writer.writePop(SEGMENT_TYPE.TEMP, 0)
 
     def compileReturn(self) -> None:
@@ -696,6 +721,19 @@ class CompilationEngine:
             self._vm_writer.writePush(SEGMENT_TYPE.CONSTANT, self._tokenizer.intVal())
             self._tokenizer.advance()
         elif self._tokenizer.tokenType() == TOKEN_TYPE.STRING_CONST: # 文字列
+            # 文字列を取得する
+            string_val = self._tokenizer.stringVal()
+
+            length = len(string_val)
+            self._vm_writer.writePush(SEGMENT_TYPE.CONSTANT, length)
+            self._vm_writer.writeCall("String.new", 1)
+
+            for c in string_val:
+                # 文字のASCIIコードを取得
+                char_code = ord(c)
+                self._vm_writer.writePush(SEGMENT_TYPE.CONSTANT, char_code)
+                self._vm_writer.writeCall("String.appendChar", 2)
+                
             self._tokenizer.advance()
         elif self._tokenizer.tokenType() == TOKEN_TYPE.KEYWORD: # true, false, null
             _keyword = self._tokenizer.current_token
@@ -711,7 +749,13 @@ class CompilationEngine:
             _name = self._tokenizer.current_token
             self._tokenizer.advance()
 
+            _kind, _index, _type = self._lookup_var(_name)
+
             if self._tokenizer.current_token == "[": # 配列参照
+                # 配列のベースアドレスをpush
+                _segment = self._kind_to_segment(_kind)
+                self._vm_writer.writePush(_segment, _index)
+
                 # symbol [
                 self._tokenizer.advance()
 
@@ -721,61 +765,56 @@ class CompilationEngine:
                 # symbol ]
                 self._tokenizer.advance()
 
+                # 2. アドレスを計算してTHATに設定し、値を取り出す
+                self._vm_writer.writeArithmetic(COMMAND_TYPE.ADD)
+                self._vm_writer.writePop(SEGMENT_TYPE.POINTER, 1)
+                self._vm_writer.writePush(SEGMENT_TYPE.THAT, 0)
+
             elif self._tokenizer.current_token == "(" or self._tokenizer.current_token == ".": # subroutine call
                 _expression_count = 0
                 _sub_method_name = ""
-                _is_method_call = False
-
-                # ローカル変数(オブジェクト).method()の場合
-                _kind = self._subroutine_table.kindOf(_name)
-                if _kind is not None and _kind != KIND_TYPE.NONE and self._tokenizer.current_token == ".":
-                    _segment = self._kind_to_segment(_kind)
-                    _index = self._subroutine_table.indexOf(_name)
-                    self._vm_writer.writePush(_segment, _index)
-                    _expression_count += 1
-                    _is_method_call = True
-                    _var_type = self._subroutine_table.typeOf(_name)
-                    _name = _var_type
-
-                if self._tokenizer.current_token == "(":
-                    # symbol (
-                    self._tokenizer.advance()
-
-                    # expressionList
-                    _expression_count = self.compileExpressionList()
-
-                    # symbol )
-                    self._tokenizer.advance()
-
+                
+                # 次のトークンが "." なら (className または varName).methodName() の形
                 if self._tokenizer.current_token == ".":
+                    if _kind is not None and _kind != KIND_TYPE.NONE:
+                        # 変数(オブジェクト)のメソッドなら, thisをstackに積む
+                        _segment = self._kind_to_segment(_kind)
+                        self._vm_writer.writePush(_segment, _index)
+                        _expression_count += 1
+                        _callee_name = _type # 変数の型（例: SquareGame）
+                    else:
+                        # クラス名直接の場合（例: Square.new など）
+                        _callee_name = _name
+
                     # symbol .
                     self._tokenizer.advance()
 
                     # identifier subroutineName
                     _sub_method_name = self._tokenizer.current_token
                     self._tokenizer.advance()
-
-                    # symbol (
-                    self._tokenizer.advance()
-
-                    # expressionList
-                    _expression_count = self.compileExpressionList()
-
-                    # symbol )
-                    self._tokenizer.advance()
-
-                if _sub_method_name:
-                    _full_name = f"{_name}.{_sub_method_name}"
                 else:
-                    _full_name = f"{self._class_name}.{_name}"
+                    # "(" が続く場合（現在のクラスのメソッドを直接呼ぶ場合、例: draw() など）
+                    # 暗黙的に this を積む
+                    _callee_name = self._class_name
+                    _sub_method_name = _name
+                    self._vm_writer.writePush(SEGMENT_TYPE.POINTER, 0)
+                    _expression_count += 1
+
+                # symbol (
+                self._tokenizer.advance()
+
+                # expressionList
+                _expression_count += self.compileExpressionList()
+
+                # symbol )
+                self._tokenizer.advance()
+
+                _full_name = f"{_callee_name}.{_sub_method_name}"
                 self._vm_writer.writeCall(_full_name, _expression_count)
 
-            else: # 変数の参照
-                _kind = self._subroutine_table.kindOf(_name)
-                # クラスレベルのシンボルテーブル参照は後程追加する 
+            else: # 単なる変数の参照
                 if _kind is not None and _kind != KIND_TYPE.NONE:
                     _segment = self._kind_to_segment(_kind)
-                    _index = self._subroutine_table.indexOf(_name)
                     self._vm_writer.writePush(_segment, _index)
 
         elif self._tokenizer.current_token == "(":
@@ -797,7 +836,7 @@ class CompilationEngine:
 
             if unaryOp == "-":
                 self._vm_writer.writeArithmetic(COMMAND_TYPE.NEG)
-            else: # unaryOp == "~""
+            else: # unaryOp == "~"
                 self._vm_writer.writeArithmetic(COMMAND_TYPE.NOT)
 
     def compileExpressionList(self) ->int:
